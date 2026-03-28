@@ -5,7 +5,12 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Notification, ChevronDown, Settings, Logout } from "@carbon/icons-react";
 
-export default function DashboardHeader() {
+interface DashboardHeaderProps {
+  title?: string;
+  subtitle?: string;
+}
+
+export default function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -28,7 +33,7 @@ export default function DashboardHeader() {
 
   return (
     <motion.header
-      className="flex items-center justify-between px-10 h-[80px] bg-white z-10"
+      className="flex items-center justify-between px-6 h-[80px] bg-white z-10"
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -39,8 +44,8 @@ export default function DashboardHeader() {
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.4, delay: 0.1 }}
       >
-        <h1 className="text-[18px] font-bold text-[#0F172A]">Dashboard</h1>
-        <p className="text-[12px] text-[#64748B]">Welcome back, Udeme — {today}</p>
+        <h1 className="text-[18px] font-bold leading-[28px] text-[#0F172A]">{title || "Dashboard"}</h1>
+        <p className="text-[14px] text-[#64748B]">{subtitle || `Welcome back, Udeme — ${today}`}</p>
       </motion.div>
 
       <motion.div

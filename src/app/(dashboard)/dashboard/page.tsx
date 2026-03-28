@@ -13,7 +13,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-w-0">
       <DashboardHeader />
 
-      <div className="px-10 py-8 flex flex-col gap-6 min-w-0 overflow-hidden">
+      <div className="px-6 py-6 flex flex-col gap-6 min-w-0 overflow-hidden">
         {/* Overview Header */}
         <motion.div
           className="flex items-center justify-between"
