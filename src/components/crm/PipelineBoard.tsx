@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Currency, Time, Calendar, ArrowRight } from "@carbon/icons-react";
 import {
@@ -173,7 +173,10 @@ function DroppableColumn({ col, cards, colIdx, onCardClick }: { col: ColumnConfi
 
 // ── Main Board ──
 export default function PipelineBoard({ searchQuery = "", onCardClick }: { searchQuery?: string; onCardClick?: (card: PipelineCard, colId: string) => void }) {
+  const [mounted, setMounted] = useState(false);
   const [cardsByColumn, setCardsByColumn] = useState(initialCards);
+
+  useEffect(() => { setMounted(true); }, []);
   const [activeCard, setActiveCard] = useState<PipelineCard | null>(null);
   const [activeColId, setActiveColId] = useState<string | null>(null);
 
@@ -231,6 +234,8 @@ export default function PipelineBoard({ searchQuery = "", onCardClick }: { searc
   };
 
   const activeColConfig = activeColId ? columnConfigs.find((c) => c.id === activeColId) : null;
+
+  if (!mounted) return null;
 
   return (
     <DndContext
