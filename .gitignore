@@ -34,6 +34,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# deployment artifacts
+*.zip
+/Hagion_Admin_Dashboard_out/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
