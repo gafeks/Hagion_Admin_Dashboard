@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Notification, ChevronDown, Settings, Logout } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
 
 interface DashboardHeaderProps {
   title?: string;
@@ -11,8 +12,11 @@ interface DashboardHeaderProps {
 }
 
 export default function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+  const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -20,6 +24,14 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
     day: "numeric",
     year: "numeric",
   });
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      setEmail(user.email ?? null);
+      setDisplayName(user.user_metadata?.full_name || user.email?.split("@")[0] || null);
+    });
+  }, []);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -30,6 +42,16 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const handleSignOut = async () => {
+    setDropdownOpen(false);
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
+  const initials = displayName
+    ? displayName.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase()
+    : "";
 
   return (
     <motion.header
@@ -45,7 +67,7 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
         transition={{ duration: 0.4, delay: 0.1 }}
       >
         <h1 className="text-[18px] font-bold leading-[28px] text-[#0F172A]">{title || "Dashboard"}</h1>
-        <p className="text-[14px] text-[#64748B]">{subtitle || `Welcome back, Udeme — ${today}`}</p>
+        <p className="text-[14px] text-[#64748B]">{subtitle || `Welcome back${displayName ? `, ${displayName}` : ""} — ${today}`}</p>
       </motion.div>
 
       <motion.div
@@ -87,13 +109,9 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <Image
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=60&h=60&fit=crop&crop=face"
-              alt="Profile"
-              width={30}
-              height={30}
-              className="rounded-full object-cover"
-            />
+            <div className="w-[30px] h-[30px] rounded-full bg-[#2D2555] flex items-center justify-center text-[12px] font-semibold text-white">
+              {initials}
+            </div>
             <motion.div animate={{ rotate: dropdownOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
               <ChevronDown size={20} className="text-[#737373]" />
             </motion.div>
@@ -110,8 +128,8 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
               >
                 {/* User info */}
                 <div className="px-3 py-1.5">
-                  <p className="text-[14px] font-semibold text-[#0A0A0A]">Gift Hagion</p>
-                  <p className="text-[12px] text-[#737373]">gifthegion@gmail.com</p>
+                  <p className="text-[14px] font-semibold text-[#0A0A0A]">{displayName || "Admin"}</p>
+                  <p className="text-[12px] text-[#737373]">{email || ""}</p>
                 </div>
 
                 <div className="h-px bg-[#F5F5F5] my-1" />
@@ -132,7 +150,7 @@ export default function DashboardHeader({ title, subtitle }: DashboardHeaderProp
                 <motion.button
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-left hover:bg-[#FEF2F2] transition-colors"
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setDropdownOpen(false)}
+                  onClick={handleSignOut}
                 >
                   <Logout size={16} className="text-[#DC2626]" />
                   <span className="text-[14px] text-[#DC2626]">Sign out</span>

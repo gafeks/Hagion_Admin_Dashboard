@@ -1,10 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Email } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
+import ErrorState from "@/components/shared/ErrorState";
 
 interface OTPForm {
   otp: string[];
@@ -12,11 +14,23 @@ interface OTPForm {
 
 export default function VerifyOTPPage() {
   const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
   const { setValue, watch, handleSubmit, formState: { isSubmitting } } = useForm<OTPForm>({
     defaultValues: { otp: ["", "", "", "", "", ""] },
   });
   const otp = watch("otp");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    const storedEmail = sessionStorage.getItem("hagion-reset-email");
+    if (!storedEmail) {
+      router.replace("/forgot-password");
+      return;
+    }
+    setEmail(storedEmail);
+  }, [router]);
 
   const handleChange = (index: number, value: string) => {
     if (value.length > 1) value = value[value.length - 1];
@@ -49,10 +63,27 @@ export default function VerifyOTPPage() {
     inputRefs.current[nextEmpty]?.focus();
   };
 
-  const onSubmit = (data: OTPForm) => {
+  const onSubmit = async (data: OTPForm) => {
+    if (!email) return;
+    setAuthError(null);
     const code = data.otp.join("");
-    console.log("OTP:", code);
+
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
+
+    if (error) {
+      setAuthError("Invalid or expired code. Please try again.");
+      return;
+    }
+
     router.push("/reset-password");
+  };
+
+  const handleResend = async () => {
+    if (!email) return;
+    setResendMessage(null);
+    setAuthError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    setResendMessage(error ? null : "A new code has been sent.");
   };
 
   return (
@@ -120,6 +151,7 @@ export default function VerifyOTPPage() {
               Enter the OTP here
             </span>
           </div>
+          {authError && <ErrorState message={authError} compact />}
 
           {/* Submit */}
           <motion.button
@@ -133,18 +165,22 @@ export default function VerifyOTPPage() {
           </motion.button>
 
           {/* Resend */}
-          <div className="flex items-center gap-[5px]">
-            <span className="text-[16px] font-normal leading-[19px] text-[#0B0B0B]">
-              {"Didn't receive a code?"}
-            </span>
-            <motion.button
-              type="button"
-              className="text-[16px] font-medium leading-[19px] text-[#068653] hover:text-[#057a4a] transition-colors"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Resend
-            </motion.button>
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex items-center gap-[5px]">
+              <span className="text-[16px] font-normal leading-[19px] text-[#0B0B0B]">
+                {"Didn't receive a code?"}
+              </span>
+              <motion.button
+                type="button"
+                onClick={handleResend}
+                className="text-[16px] font-medium leading-[19px] text-[#068653] hover:text-[#057a4a] transition-colors"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Resend
+              </motion.button>
+            </div>
+            {resendMessage && <span className="text-[13px] text-[#068653]">{resendMessage}</span>}
           </div>
         </form>
       </div>

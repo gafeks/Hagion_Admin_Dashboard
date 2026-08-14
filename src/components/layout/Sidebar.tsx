@@ -4,7 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useSidebar } from "@/context/SidebarContext";
+import { supabase } from "@/lib/supabase";
 import {
   Dashboard,
   DocumentBlank,
@@ -36,7 +38,13 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { collapsed, toggle } = useSidebar();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace("/login");
+  };
 
   return (
     <motion.aside
@@ -141,6 +149,7 @@ export default function Sidebar() {
       {/* Bottom — Logout */}
       <div className="px-3 py-3 border-t border-white/5">
         <motion.button
+          onClick={handleLogout}
           className={`flex items-center gap-3 w-full px-3 py-2.5 bg-white rounded-lg text-[14px] font-semibold text-[#E7000B] transition-colors hover:bg-gray-50 ${collapsed ? "justify-center" : ""}`}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}

@@ -6,6 +6,8 @@ import { motion } from "framer-motion";
 import { ViewOff, View } from "@carbon/icons-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import ErrorState from "@/components/shared/ErrorState";
 
 interface LoginForm {
   email: string;
@@ -15,10 +17,21 @@ interface LoginForm {
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginForm>();
 
-  const onSubmit = (data: LoginForm) => {
-    console.log(data);
+  const onSubmit = async (data: LoginForm) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password,
+    });
+
+    if (error) {
+      setAuthError("Invalid email or password.");
+      return;
+    }
+
     router.push("/dashboard");
   };
 
@@ -74,6 +87,7 @@ export default function LoginPage() {
               </div>
               {errors.password && <span className="text-[11px] text-[#D42620]">{errors.password.message}</span>}
             </div>
+            {authError && <ErrorState message={authError} compact />}
           </div>
 
           {/* Submit */}

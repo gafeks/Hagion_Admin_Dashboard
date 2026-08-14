@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Close } from "@carbon/icons-react";
+import { Close, DocumentDownload } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
 
 interface RFQDetail {
   code: string;
@@ -12,6 +14,7 @@ interface RFQDetail {
   budget?: string;
   timeline?: string;
   description?: string;
+  filePath?: string | null;
 }
 
 interface RFQDetailModalProps {
@@ -20,16 +23,26 @@ interface RFQDetailModalProps {
   onClose: () => void;
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
+function DetailField({ label, value, capitalize = true }: { label: string; value: string; capitalize?: boolean }) {
   return (
     <div className="flex flex-col">
       <span className="text-[13px] font-normal leading-[17px] text-[#64748B]">{label}</span>
-      <span className="text-[15px] font-semibold leading-[22px] text-[#0A0A0A] capitalize">{value}</span>
+      <span className={`text-[15px] font-semibold leading-[22px] text-[#0A0A0A] ${capitalize ? "capitalize" : ""}`}>{value}</span>
     </div>
   );
 }
 
 export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalProps) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!rfq?.filePath) return;
+    setDownloading(true);
+    const { data } = await supabase.storage.from("rfq-attachments").createSignedUrl(rfq.filePath, 60);
+    setDownloading(false);
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
   return (
     <AnimatePresence>
       {open && rfq && (
@@ -77,7 +90,7 @@ export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalPro
                 {/* Info Grid */}
                 <div className="grid grid-cols-2 gap-x-[17px] gap-y-[17px]">
                   <DetailField label="Client" value={rfq.client} />
-                  <DetailField label="Email" value={rfq.email} />
+                  <DetailField label="Email" value={rfq.email} capitalize={false} />
                   <DetailField label="Phone" value={rfq.phone || "—"} />
                   <DetailField label="Service" value={rfq.service} />
                   <DetailField label="Budget" value={rfq.budget || "—"} />
@@ -93,6 +106,17 @@ export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalPro
                     </p>
                   </div>
                 </div>
+
+                {rfq.filePath && (
+                  <button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="flex items-center gap-2 text-[14px] font-medium text-[#2D2555] hover:underline disabled:opacity-60"
+                  >
+                    <DocumentDownload size={18} />
+                    {downloading ? "Preparing download..." : "Download attachment"}
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

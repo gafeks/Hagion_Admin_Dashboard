@@ -21,6 +21,9 @@ jobs:
 
       - name: Build Next.js (Static Export)
         run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Deploy to Hostinger (admin subdomain)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4

@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
+import ErrorState from "@/components/shared/ErrorState";
 
 interface ForgotPasswordForm {
   email: string;
@@ -11,10 +14,19 @@ interface ForgotPasswordForm {
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
+  const [authError, setAuthError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ForgotPasswordForm>();
 
-  const onSubmit = (data: ForgotPasswordForm) => {
-    console.log(data);
+  const onSubmit = async (data: ForgotPasswordForm) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(data.email);
+
+    if (error) {
+      setAuthError("Something went wrong sending the code. Please try again.");
+      return;
+    }
+
+    sessionStorage.setItem("hagion-reset-email", data.email);
     router.push("/verify-otp");
   };
 
@@ -52,6 +64,7 @@ export default function ForgotPasswordPage() {
               </span>
             )}
           </div>
+          {authError && <ErrorState message={authError} compact />}
 
           {/* Submit */}
           <motion.button

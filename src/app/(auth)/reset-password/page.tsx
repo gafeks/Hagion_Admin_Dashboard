@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ViewOff, View } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
+import ErrorState from "@/components/shared/ErrorState";
+import Loader from "@/components/shared/Loader";
 
 interface ResetPasswordForm {
   newPassword: string;
@@ -15,12 +18,37 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<ResetPasswordForm>();
 
-  const onSubmit = (data: ResetPasswordForm) => {
-    console.log(data);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.replace("/forgot-password");
+        return;
+      }
+      setCheckingSession(false);
+    });
+  }, [router]);
+
+  const onSubmit = async (data: ResetPasswordForm) => {
+    setAuthError(null);
+    const { error } = await supabase.auth.updateUser({ password: data.newPassword });
+
+    if (error) {
+      setAuthError("Something went wrong updating your password. Please try again.");
+      return;
+    }
+
+    sessionStorage.removeItem("hagion-reset-email");
+    await supabase.auth.signOut();
     router.push("/password-success");
   };
+
+  if (checkingSession) {
+    return <Loader />;
+  }
 
   return (
     <div className="flex flex-col items-center">
@@ -96,6 +124,7 @@ export default function ResetPasswordPage() {
               <span className="text-[10px] leading-[12px] tracking-[-0.02em] text-[#D42620]">{errors.confirmPassword.message}</span>
             )}
           </div>
+          {authError && <ErrorState message={authError} compact />}
 
           {/* Submit */}
           <motion.button
