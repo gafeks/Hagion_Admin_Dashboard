@@ -4,52 +4,56 @@ import dynamic from "next/dynamic";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-const options: ApexCharts.ApexOptions = {
-  chart: {
-    type: "bar",
-    toolbar: { show: false },
-    fontFamily: "Segoe UI, sans-serif",
-  },
-  colors: ["#2D2555", "#068653"],
-  plotOptions: {
-    bar: {
-      columnWidth: "55%",
-      borderRadius: 4,
-      borderRadiusApplication: "end",
-      dataLabels: { position: "top" },
+interface RFQVolumeChartProps {
+  categories: string[];
+  submitted: number[];
+  won: number[];
+}
+
+export default function RFQVolumeChart({ categories, submitted, won }: RFQVolumeChartProps) {
+  const options: ApexCharts.ApexOptions = {
+    chart: {
+      type: "bar",
+      toolbar: { show: false },
+      fontFamily: "Segoe UI, sans-serif",
     },
-  },
-  dataLabels: { enabled: false },
-  stroke: { show: true, width: 2, colors: ["transparent"] },
-  xaxis: {
-    categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-    labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
-    axisBorder: { show: false },
-    axisTicks: { show: false },
-  },
-  yaxis: {
-    labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
-    min: 0,
-    max: 16,
-    tickAmount: 4,
-  },
-  grid: {
-    borderColor: "#F1F5F9",
-    strokeDashArray: 4,
-    yaxis: { lines: { show: true } },
-    xaxis: { lines: { show: false } },
-  },
-  fill: { opacity: 1 },
-  legend: { show: false },
-  tooltip: { theme: "dark" },
-};
+    colors: ["#2D2555", "#068653"],
+    plotOptions: {
+      bar: {
+        columnWidth: "55%",
+        borderRadius: 4,
+        borderRadiusApplication: "end",
+        dataLabels: { position: "top" },
+      },
+    },
+    dataLabels: { enabled: false },
+    stroke: { show: true, width: 2, colors: ["transparent"] },
+    xaxis: {
+      categories,
+      labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
+      min: 0,
+    },
+    grid: {
+      borderColor: "#F1F5F9",
+      strokeDashArray: 4,
+      yaxis: { lines: { show: true } },
+      xaxis: { lines: { show: false } },
+    },
+    fill: { opacity: 1 },
+    legend: { show: false },
+    tooltip: { theme: "dark" },
+  };
 
-const series = [
-  { name: "Submitted", data: [3, 5, 4, 8, 10, 7, 13] },
-  { name: "Won",       data: [2, 2, 2, 4, 5, 3, 7] },
-];
+  const series = [
+    { name: "Submitted", data: submitted },
+    { name: "Won", data: won },
+  ];
 
-export default function RFQVolumeChart() {
   return (
     <div className="bg-white border border-[#F1F5F9] rounded-[16px] p-[23.6px]">
       <div className="flex items-start justify-between mb-1">

@@ -4,23 +4,74 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Close, Upload } from "@carbon/icons-react";
 import SelectDropdown from "@/components/shared/SelectDropdown";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/logActivity";
 
 interface NewProjectModalProps {
   open: boolean;
   onClose: () => void;
+  onCreated?: () => void;
 }
 
-export default function NewProjectModal({ open, onClose }: NewProjectModalProps) {
+export default function NewProjectModal({ open, onClose, onCreated }: NewProjectModalProps) {
   const [projectName, setProjectName] = useState("");
   const [clientName, setClientName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("Planning");
   const [budget, setBudget] = useState("");
   const [progress, setProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const imagePreviewUrl = imageFile ? URL.createObjectURL(imageFile) : null;
+
+  const resetForm = () => {
+    setProjectName("");
+    setClientName("");
+    setDescription("");
+    setStartDate("");
+    setEndDate("");
+    setStatus("Planning");
+    setBudget("");
+    setProgress(0);
+    setImageFile(null);
+  };
+
+  const handleCreate = async () => {
+    if (!projectName.trim()) return;
+    setSaving(true);
+
+    let coverImagePath: string | null = null;
+    if (imageFile) {
+      const path = `${crypto.randomUUID()}/${imageFile.name}`;
+      const { error: uploadError } = await supabase.storage.from("portfolio-images").upload(path, imageFile);
+      if (!uploadError) coverImagePath = path;
+    }
+
+    const { error } = await supabase.from("portfolio_projects").insert({
+      title: projectName.trim(),
+      client: clientName,
+      description,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      status,
+      budget,
+      progress,
+      cover_image_path: coverImagePath,
+    });
+
+    if (!error) {
+      logActivity({ action: "created", module: "Portfolio", affectedItem: projectName.trim(), description: `Created new portfolio project: '${projectName.trim()}'` });
+      resetForm();
+      onCreated?.();
+      onClose();
+    }
+    setSaving(false);
+  };
 
   return (
     <AnimatePresence>
@@ -94,30 +145,46 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
 
                   {/* Image Upload */}
                   <div
-                    className={`w-full h-[135px] bg-[#FAFAFA] border border-dashed border-[#2D2555] rounded-[4px] flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
+                    className={`w-full h-[135px] bg-[#FAFAFA] border border-dashed border-[#2D2555] rounded-[4px] flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors overflow-hidden ${
                       dragOver ? "bg-[#2D2555]/5" : ""
                     }`}
                     onClick={() => fileInputRef.current?.click()}
                     onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
-                    onDrop={(e) => { e.preventDefault(); setDragOver(false); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setImageFile(file);
+                    }}
                   >
                     <input
                       ref={fileInputRef}
                       type="file"
                       accept=".png,.jpg,.jpeg,.svg"
                       className="hidden"
+                      onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
                     />
-                    <Upload size={20} className="text-[#343330]" />
-                    <p className="text-[10.8px] font-bold text-[#2D2555] text-center leading-4">
-                      Click or drag and drop here
-                    </p>
-                    <p className="text-[9.48px] text-[#52525B] text-center">
-                      to upload your image or logo
-                    </p>
-                    <p className="text-[9.48px] text-[#52525B] text-center">
-                      .png, .jpg .svg up to 5MB
-                    </p>
+                    {imagePreviewUrl ? (
+                      <div className="relative w-full h-full flex items-center justify-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={imagePreviewUrl} alt="Selected cover" className="max-h-full max-w-full object-contain" />
+                        <p className="absolute bottom-1 text-[9.48px] text-[#52525B] bg-white/80 px-2 rounded">{imageFile?.name}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={20} className="text-[#343330]" />
+                        <p className="text-[10.8px] font-bold text-[#2D2555] text-center leading-4">
+                          Click or drag and drop here
+                        </p>
+                        <p className="text-[9.48px] text-[#52525B] text-center">
+                          to upload your image or logo
+                        </p>
+                        <p className="text-[9.48px] text-[#52525B] text-center">
+                          .png, .jpg .svg up to 5MB
+                        </p>
+                      </>
+                    )}
                   </div>
 
                   {/* Start Date + End Date */}
@@ -187,11 +254,13 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
 
                   {/* Create Project */}
                   <motion.button
-                    className="w-full h-10 flex items-center justify-center bg-[#2D2555] rounded-[6px] text-[14px] font-semibold text-[#FAFAFA] cursor-pointer"
+                    className="w-full h-10 flex items-center justify-center bg-[#2D2555] rounded-[6px] text-[14px] font-semibold text-[#FAFAFA] cursor-pointer disabled:opacity-60"
                     whileHover={{ scale: 1.01, boxShadow: "0 4px 12px rgba(45,37,85,0.3)" }}
                     whileTap={{ scale: 0.98 }}
+                    disabled={saving || !projectName.trim()}
+                    onClick={handleCreate}
                   >
-                    Create Project
+                    {saving ? "Creating..." : "Create Project"}
                   </motion.button>
                 </div>
               </motion.div>

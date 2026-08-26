@@ -3,8 +3,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Close, CheckmarkOutline } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/logActivity";
 
 interface Member {
+  id: string;
   name: string;
   initials: string;
   email: string;
@@ -15,16 +18,30 @@ interface ManageAdminModalProps {
   member: Member | null;
   open: boolean;
   onClose: () => void;
+  onRoleChanged?: () => void;
 }
 
-const roles = ["Super Admin", "Service Admin", "Content Admin", "Finance Admin"];
+const roles = ["Super Admin", "Admin", "Content Admin"];
 
-export default function ManageAdminModal({ member, open, onClose }: ManageAdminModalProps) {
+export default function ManageAdminModal({ member, open, onClose, onRoleChanged }: ManageAdminModalProps) {
   const [selectedRole, setSelectedRole] = useState(member?.role ?? "");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (member) setSelectedRole(member.role);
   }, [member]);
+
+  const handleSelectRole = async (role: string) => {
+    if (!member || role === selectedRole) return;
+    setSelectedRole(role);
+    setSaving(true);
+    const { error } = await supabase.from("admin_profiles").update({ role }).eq("id", member.id);
+    if (!error) {
+      logActivity({ action: "updated", module: "Admin Management", affectedItem: member.email, description: `Changed ${member.name}'s role to ${role}` });
+      onRoleChanged?.();
+    }
+    setSaving(false);
+  };
 
   return (
     <AnimatePresence>
@@ -103,8 +120,9 @@ export default function ManageAdminModal({ member, open, onClose }: ManageAdminM
                       return (
                         <motion.button
                           key={role}
-                          onClick={() => setSelectedRole(role)}
-                          className="flex items-center justify-between w-full px-4 h-[42.4px] rounded-[12px] border text-[14px] font-semibold cursor-pointer transition-colors"
+                          onClick={() => handleSelectRole(role)}
+                          disabled={saving}
+                          className="flex items-center justify-between w-full px-4 h-[42.4px] rounded-[12px] border text-[14px] font-semibold cursor-pointer transition-colors disabled:opacity-60"
                           style={
                             active
                               ? {
@@ -131,21 +149,23 @@ export default function ManageAdminModal({ member, open, onClose }: ManageAdminM
 
                 {/* Action buttons */}
                 <div className="flex flex-col gap-2 pt-[0.4px]">
-                  <motion.button
-                    className="flex items-center justify-center w-full h-[36.79px] bg-[#EF4444] rounded-[6px] text-[14px] font-semibold text-white cursor-pointer"
-                    style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.1), 0px 1px 2px -1px rgba(0,0,0,0.1)" }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <button
+                    disabled
+                    title="Suspending accounts requires Supabase's Authentication → Users panel"
+                    className="flex items-center justify-center w-full h-[36.79px] bg-[#EF4444]/40 rounded-[6px] text-[14px] font-semibold text-white cursor-not-allowed"
                   >
                     Suspend Account
-                  </motion.button>
-                  <motion.button
-                    className="flex items-center justify-center w-full h-[36.79px] bg-white border border-[#EF4444] rounded-[6px] text-[14px] font-semibold text-[#EF4444] cursor-pointer"
-                    whileHover={{ scale: 1.02, backgroundColor: "#FEF2F2" }}
-                    whileTap={{ scale: 0.98 }}
+                  </button>
+                  <button
+                    disabled
+                    title="Deleting accounts requires Supabase's Authentication → Users panel"
+                    className="flex items-center justify-center w-full h-[36.79px] bg-white border border-[#EF4444]/40 rounded-[6px] text-[14px] font-semibold text-[#EF4444]/60 cursor-not-allowed"
                   >
                     Delete Account
-                  </motion.button>
+                  </button>
+                  <p className="text-[11px] text-[#94A3B8] text-center">
+                    Suspend/delete from Supabase → Authentication → Users
+                  </p>
                 </div>
 
               </div>

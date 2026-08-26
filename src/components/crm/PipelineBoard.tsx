@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Currency, Time, Calendar, ArrowRight } from "@carbon/icons-react";
 import {
@@ -48,25 +48,6 @@ const columnConfigs: ColumnConfig[] = [
   { id: "won", label: "Won", dotColor: "bg-[#068653]", badgeBg: "bg-[#068653]/10", badgeText: "text-[#068653]", avatarBg: "bg-[#068653]", tagBg: "bg-[#068653]/10", tagText: "text-[#068653]", borderColor: "border-l-[#068653]" },
   { id: "lost", label: "Lost", dotColor: "bg-[#EF4444]", badgeBg: "bg-[#EF4444]/10", badgeText: "text-[#EF4444]", avatarBg: "bg-[#EF4444]", tagBg: "bg-[#EF4444]/10", tagText: "text-[#EF4444]", borderColor: "border-l-[#EF4444]" },
 ];
-
-const initialCards: Record<string, PipelineCard[]> = {
-  "new-lead": [
-    { id: "card-1", client: "LogistiCore Nigeria", initial: "L", rfqCode: "RFQ-2026-003", service: "AI Solutions", budget: "$50K–100K", timeline: "6–12 mo", date: "Mar 6, 2026" },
-  ],
-  "in-review": [
-    { id: "card-2", client: "TechBridge Ghana", initial: "T", rfqCode: "RFQ-2026-001", service: "Cloud Solutions", budget: "$15K–50K", timeline: "3–6 mo", date: "Mar 6, 2026" },
-    { id: "card-3", client: "NileHealth Sudan", initial: "N", rfqCode: "RFQ-2026-004", service: "Cybersecurity", budget: "$15K–50K", timeline: "3–6 mo", date: "Mar 6, 2026" },
-  ],
-  "proposal-sent": [
-    { id: "card-4", client: "Sahel Agri Solutions", initial: "S", rfqCode: "RFQ-2026-002", service: "Web Development", budget: "$15K–50K", timeline: "3–6 mo", date: "Mar 6, 2026" },
-  ],
-  "won": [
-    { id: "card-5", client: "Savanna Capital Kenya", initial: "S", rfqCode: "RFQ-2026-005", service: "Mobile App", budget: "$50K–100K", timeline: "6–12 mo", date: "Mar 6, 2026" },
-  ],
-  "lost": [
-    { id: "card-6", client: "FinanceCore Inc.", initial: "F", rfqCode: "RFQ-2026-006", service: "Cloud Solutions", budget: "$50K–100K", timeline: "6–12 mo", date: "Mar 6, 2026" },
-  ],
-};
 
 // ── Draggable Card ──
 function SortableCard({ card, col, onViewDetails }: { card: PipelineCard; col: ColumnConfig; onViewDetails?: () => void }) {
@@ -172,13 +153,23 @@ function DroppableColumn({ col, cards, colIdx, onCardClick }: { col: ColumnConfi
 }
 
 // ── Main Board ──
-export default function PipelineBoard({ searchQuery = "", onCardClick }: { searchQuery?: string; onCardClick?: (card: PipelineCard, colId: string) => void }) {
+interface PipelineBoardProps {
+  cardsByColumn: Record<string, PipelineCard[]>;
+  searchQuery?: string;
+  onCardClick?: (card: PipelineCard, colId: string) => void;
+  onCardMove?: (cardId: string, fromCol: string, toCol: string) => void;
+}
+
+export default function PipelineBoard({ cardsByColumn: cardsProp, searchQuery = "", onCardClick, onCardMove }: PipelineBoardProps) {
   const [mounted, setMounted] = useState(false);
-  const [cardsByColumn, setCardsByColumn] = useState(initialCards);
+  const [cardsByColumn, setCardsByColumn] = useState(cardsProp);
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { setCardsByColumn(cardsProp); }, [cardsProp]);
+
   const [activeCard, setActiveCard] = useState<PipelineCard | null>(null);
   const [activeColId, setActiveColId] = useState<string | null>(null);
+  const originColRef = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -199,6 +190,7 @@ export default function PipelineBoard({ searchQuery = "", onCardClick }: { searc
     if (card) {
       setActiveCard(card);
       setActiveColId(colId);
+      originColRef.current = colId;
     }
   };
 
@@ -228,9 +220,16 @@ export default function PipelineBoard({ searchQuery = "", onCardClick }: { searc
     });
   };
 
-  const handleDragEnd = (_event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
+    const cardId = event.active.id as string;
+    const originCol = originColRef.current;
+    const finalCol = findColumn(cardId);
+    if (originCol && finalCol && originCol !== finalCol) {
+      onCardMove?.(cardId, originCol, finalCol);
+    }
     setActiveCard(null);
     setActiveColId(null);
+    originColRef.current = null;
   };
 
   const activeColConfig = activeColId ? columnConfigs.find((c) => c.id === activeColId) : null;

@@ -9,12 +9,14 @@ import NewPostModal from "@/components/blog/NewPostModal";
 
 export default function BlogPage() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [count, setCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      <DashboardHeader title="Blog Management" subtitle="5 Posts" />
+      <DashboardHeader title="Blog Management" subtitle={`${count} Posts`} />
 
-      <main className="px-6 py-6 flex-1 flex flex-col gap-6 min-h-0 overflow-hidden">
+      <main className="px-6 py-6 flex-1 flex flex-col gap-6 min-h-0 overflow-y-auto">
         <motion.div
           className="flex items-center justify-between"
           initial={{ opacity: 0, y: 15 }}
@@ -47,11 +49,15 @@ export default function BlogPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
         >
-          <BlogPostsTable />
+          <BlogPostsTable key={refreshKey} onCountChange={setCount} />
         </motion.div>
       </main>
 
-      <NewPostModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <NewPostModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

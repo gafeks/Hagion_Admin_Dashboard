@@ -7,7 +7,6 @@ import {
   UserMultiple,
   Activity,
   Apps,
-  Wifi,
   Laptop,
   Document,
   Time,
@@ -35,7 +34,7 @@ const moduleStyle: Record<string, { bg: string; text: string }> = {
 };
 
 export interface LogEntry {
-  id: number;
+  id: string;
   initials: string;
   name: string;
   email: string;
@@ -45,7 +44,6 @@ export interface LogEntry {
   module: string;
   affectedItem: string;
   date: string;
-  ipAddress: string;
   device: string;
   additionalDetails: string;
 }
@@ -189,26 +187,15 @@ export default function ActivityDetailModal({ log, open, onClose }: ActivityDeta
                       </div>
                     </div>
 
-                    {/* Row 3: IP Address | Device */}
-                    <div className="flex justify-between gap-4">
-                      <div className="flex flex-col gap-1 w-[224px]">
-                        <FieldLabel icon={Wifi} label="IP Address" />
-                        <span
-                          className="text-[14px] font-semibold leading-5 pl-5"
-                          style={{ fontFamily: "'Segoe UI', sans-serif", color: "#1E293B" }}
-                        >
-                          {log.ipAddress}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-1 w-[224px]">
-                        <FieldLabel icon={Laptop} label="Device" />
-                        <span
-                          className="text-[14px] font-semibold leading-5 pl-5"
-                          style={{ fontFamily: "'Segoe UI', sans-serif", color: "#1E293B" }}
-                        >
-                          {log.device}
-                        </span>
-                      </div>
+                    {/* Row 3: Device */}
+                    <div className="flex flex-col gap-1">
+                      <FieldLabel icon={Laptop} label="Device" />
+                      <span
+                        className="text-[14px] font-semibold leading-5 pl-5"
+                        style={{ fontFamily: "'Segoe UI', sans-serif", color: "#1E293B" }}
+                      >
+                        {log.device || "—"}
+                      </span>
                     </div>
 
                     {/* Row 4: Affected Item (full width) */}

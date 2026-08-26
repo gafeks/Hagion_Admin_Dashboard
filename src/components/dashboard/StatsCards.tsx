@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import CountUp from "react-countup";
 import { motion } from "framer-motion";
 import {
@@ -9,56 +10,88 @@ import {
   Blog,
   Growth,
 } from "@carbon/icons-react";
-
-const stats = [
-  {
-    label: "Total RFQs",
-    value: 6,
-    suffix: "",
-    change: "+12%",
-    Icon: DocumentBlank,
-    iconColor: "#2D2555",
-    iconBg: "rgba(45, 37, 85, 0.07)",
-  },
-  {
-    label: "Open Leads",
-    value: 0,
-    suffix: "",
-    tag: "Needs attention",
-    Icon: Email,
-    iconColor: "#F59E0B",
-    iconBg: "rgba(245, 158, 11, 0.08)",
-  },
-  {
-    label: "Active Projects",
-    value: 2,
-    suffix: "",
-    change: "+8%",
-    Icon: ChartLineSmooth,
-    iconColor: "#3B82F6",
-    iconBg: "rgba(59, 130, 246, 0.08)",
-  },
-  {
-    label: "Blog Posts",
-    value: 4,
-    suffix: "",
-    tag: "1 drafts",
-    Icon: Blog,
-    iconColor: "#A855F7",
-    iconBg: "rgba(168, 85, 247, 0.08)",
-  },
-  {
-    label: "Conversion Rate",
-    value: 17,
-    suffix: "%",
-    change: "+5%",
-    Icon: Growth,
-    iconColor: "#068653",
-    iconBg: "rgba(6, 134, 83, 0.07)",
-  },
-];
+import { supabase } from "@/lib/supabase";
 
 export default function StatsCards() {
+  const [totalRfqs, setTotalRfqs] = useState(0);
+  const [openLeads, setOpenLeads] = useState(0);
+  const [activeProjects, setActiveProjects] = useState(0);
+  const [blogPosts, setBlogPosts] = useState(0);
+  const [drafts, setDrafts] = useState(0);
+  const [conversionRate, setConversionRate] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const [rfqRes, leadRes, projectRes, blogRes] = await Promise.all([
+        supabase.from("rfqs").select("id", { count: "exact", head: true }),
+        supabase.from("leads").select("stage"),
+        supabase.from("portfolio_projects").select("id", { count: "exact", head: true }).eq("status", "In progress"),
+        supabase.from("blog_posts").select("status"),
+      ]);
+
+      setTotalRfqs(rfqRes.count ?? 0);
+
+      const leads = leadRes.data ?? [];
+      setOpenLeads(leads.filter((l) => !["won", "lost"].includes(l.stage)).length);
+      const won = leads.filter((l) => l.stage === "won").length;
+      setConversionRate(leads.length > 0 ? Math.round((won / leads.length) * 100) : 0);
+
+      setActiveProjects(projectRes.count ?? 0);
+
+      const posts = blogRes.data ?? [];
+      setBlogPosts(posts.length);
+      setDrafts(posts.filter((p) => p.status === "Draft").length);
+    })();
+  }, []);
+
+  const stats = [
+    {
+      label: "Total RFQs",
+      value: totalRfqs,
+      suffix: "",
+      tag: "All time",
+      Icon: DocumentBlank,
+      iconColor: "#2D2555",
+      iconBg: "rgba(45, 37, 85, 0.07)",
+    },
+    {
+      label: "Open Leads",
+      value: openLeads,
+      suffix: "",
+      tag: openLeads > 0 ? "Needs attention" : "All clear",
+      Icon: Email,
+      iconColor: "#F59E0B",
+      iconBg: "rgba(245, 158, 11, 0.08)",
+    },
+    {
+      label: "Active Projects",
+      value: activeProjects,
+      suffix: "",
+      tag: "In progress",
+      Icon: ChartLineSmooth,
+      iconColor: "#3B82F6",
+      iconBg: "rgba(59, 130, 246, 0.08)",
+    },
+    {
+      label: "Blog Posts",
+      value: blogPosts,
+      suffix: "",
+      tag: `${drafts} draft${drafts === 1 ? "" : "s"}`,
+      Icon: Blog,
+      iconColor: "#A855F7",
+      iconBg: "rgba(168, 85, 247, 0.08)",
+    },
+    {
+      label: "Conversion Rate",
+      value: conversionRate,
+      suffix: "%",
+      tag: "Won / total leads",
+      Icon: Growth,
+      iconColor: "#068653",
+      iconBg: "rgba(6, 134, 83, 0.07)",
+    },
+  ];
+
   return (
     <div className="flex gap-4">
       {stats.map((stat, i) => (
@@ -79,21 +112,9 @@ export default function StatsCards() {
             >
               <stat.Icon size={20} style={{ color: stat.iconColor }} />
             </motion.div>
-            {stat.change && (
-              <motion.span
-                className="px-2 py-0.5 text-[12px] font-semibold text-[#16A34A] bg-[#F0FDF4] rounded-full"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.5 + i * 0.1, type: "spring", stiffness: 300 }}
-              >
-                {stat.change}
-              </motion.span>
-            )}
-            {stat.tag && (
-              <span className="text-[12px] font-semibold text-[#94A3B8]">
-                {stat.tag}
-              </span>
-            )}
+            <span className="text-[12px] font-semibold text-[#94A3B8]">
+              {stat.tag}
+            </span>
           </div>
 
           <span className="text-[24px] font-black text-[#0F172A]">

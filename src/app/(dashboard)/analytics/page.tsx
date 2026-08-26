@@ -1,78 +1,129 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Download, RequestQuote, UserMultiple, ArrowRight, Time } from "@carbon/icons-react";
+import { Download, RequestQuote, UserMultiple, ArrowRight, DocumentBlank } from "@carbon/icons-react";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
-import SelectDropdown from "@/components/shared/SelectDropdown";
 import RevenueTrendChart from "@/components/analytics/RevenueTrendChart";
 import ServiceBreakdownChart from "@/components/analytics/ServiceBreakdownChart";
 import RFQVolumeChart from "@/components/analytics/RFQVolumeChart";
-import { useState } from "react";
+import Loader from "@/components/shared/Loader";
+import ErrorState from "@/components/shared/ErrorState";
+import { supabase } from "@/lib/supabase";
+import { parseBudgetMidpoint } from "@/lib/budget";
+import { lastNMonths, inMonth } from "@/lib/dateBuckets";
 
-const statCards = [
-  {
-    label: "Total RFQs",
-    value: "6",
-    change: "+12%",
-    positive: true,
-    bg: "rgba(45,37,85,0.05)",
-    iconBg: "rgba(45,37,85,0.08)",
-    valueColor: "#2D2555",
-    icon: RequestQuote,
-    iconColor: "#2D2555",
-  },
-  {
-    label: "Active Clients",
-    value: "6",
-    change: "+8%",
-    positive: true,
-    bg: "#FFF0E8",
-    iconBg: "rgba(253,101,19,0.1)",
-    valueColor: "#FD6513",
-    icon: UserMultiple,
-    iconColor: "#FD6513",
-  },
-  {
-    label: "Conversion Rate",
-    value: "63%",
-    change: "+5%",
-    positive: true,
-    bg: "#E3FFF4",
-    iconBg: "rgba(6,134,83,0.05)",
-    valueColor: "#068653",
-    icon: ArrowRight,
-    iconColor: "#068653",
-  },
-  {
-    label: "Avg Response Time",
-    value: "36h",
-    change: "-20%",
-    positive: false,
-    bg: "rgba(168,85,247,0.05)",
-    iconBg: "rgba(168,85,247,0.07)",
-    valueColor: "#A855F7",
-    icon: Time,
-    iconColor: "#A855F7",
-  },
-];
+interface RfqRow {
+  id: string;
+  company_name: string | null;
+  full_name: string;
+  service: string;
+  budget: string | null;
+  status: string;
+  created_at: string;
+}
 
-const performanceRows = [
-  { service: "Web Development", rfqs: 35, conversion: "68%", avgBudget: "$18K", demand: "High" },
-  { service: "Cloud Solutions", rfqs: 25, conversion: "72%", avgBudget: "$42K", demand: "High" },
-  { service: "Mobile Apps",     rfqs: 18, conversion: "55%", avgBudget: "$28K", demand: "Medium" },
-  { service: "AI & Analytics",  rfqs: 12, conversion: "80%", avgBudget: "$65K", demand: "High" },
-  { service: "Cybersecurity",   rfqs: 6,  conversion: "50%", avgBudget: "$35K", demand: "Low" },
-  { service: "IT Consulting",   rfqs: 4,  conversion: "45%", avgBudget: "$12K", demand: "Low" },
-];
+interface LeadRow {
+  id: string;
+  service: string | null;
+  stage: string;
+  created_at: string;
+}
 
-const demandStyle: Record<string, { pill: string; text: string }> = {
-  High:   { pill: "bg-[#DCFCE7]", text: "text-[#068653]" },
-  Medium: { pill: "bg-[#FEF9C3]", text: "text-[#FD6513]" },
-  Low:    { pill: "bg-[#FEE2E2]", text: "text-[#E7000B]" },
-};
+const serviceColors = ["#2D2555", "#068653", "#3B82F6", "#A855F7", "#EF4444", "#F59E0B", "#10B981", "#F97316"];
+const closedStatuses = ["Accepted", "Rejected", "Closed"];
 
 export default function AnalyticsPage() {
-  const [period, setPeriod] = useState("last_7_months");
+  const [rfqs, setRfqs] = useState<RfqRow[]>([]);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    const [rfqRes, leadRes] = await Promise.all([
+      supabase.from("rfqs").select("id, company_name, full_name, service, budget, status, created_at"),
+      supabase.from("leads").select("id, service, stage, created_at"),
+    ]);
+
+    if (rfqRes.error || leadRes.error) {
+      setError("Couldn't load analytics data. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    setRfqs(rfqRes.data ?? []);
+    setLeads(leadRes.data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  if (loading) return <div className="flex flex-col min-h-screen"><DashboardHeader title="Analytics" subtitle="Track performance, revenue and RFQ trends" /><Loader /></div>;
+  if (error) return <div className="flex flex-col min-h-screen"><DashboardHeader title="Analytics" subtitle="Track performance, revenue and RFQ trends" /><ErrorState message={error} onRetry={load} /></div>;
+
+  const totalRfqs = rfqs.length;
+  const activeClients = new Set(rfqs.map((r) => (r.company_name || r.full_name).toLowerCase())).size;
+  const totalLeads = leads.length;
+  const wonLeads = leads.filter((l) => l.stage === "won").length;
+  const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 100) : 0;
+  const openRfqs = rfqs.filter((r) => !closedStatuses.includes(r.status)).length;
+
+  const statCards = [
+    { label: "Total RFQs", value: String(totalRfqs), tag: "All time", bg: "rgba(45,37,85,0.05)", iconBg: "rgba(45,37,85,0.08)", valueColor: "#2D2555", icon: RequestQuote, iconColor: "#2D2555" },
+    { label: "Active Clients", value: String(activeClients), tag: "Unique companies", bg: "#FFF0E8", iconBg: "rgba(253,101,19,0.1)", valueColor: "#FD6513", icon: UserMultiple, iconColor: "#FD6513" },
+    { label: "Conversion Rate", value: `${conversionRate}%`, tag: "Won / total leads", bg: "#E3FFF4", iconBg: "rgba(6,134,83,0.05)", valueColor: "#068653", icon: ArrowRight, iconColor: "#068653" },
+    { label: "Open RFQs", value: String(openRfqs), tag: "Awaiting resolution", bg: "rgba(168,85,247,0.05)", iconBg: "rgba(168,85,247,0.07)", valueColor: "#A855F7", icon: DocumentBlank, iconColor: "#A855F7" },
+  ];
+
+  const months = lastNMonths(7);
+  const monthLabels = months.map((m) => m.label);
+
+  const pipelineValueSeries = months.map(({ year, month }) =>
+    Math.round(
+      rfqs
+        .filter((r) => inMonth(r.created_at, year, month))
+        .reduce((sum, r) => sum + parseBudgetMidpoint(r.budget), 0)
+    )
+  );
+
+  const submittedSeries = months.map(({ year, month }) => rfqs.filter((r) => inMonth(r.created_at, year, month)).length);
+
+  const wonSeries = months.map(({ year, month }) => leads.filter((l) => l.stage === "won" && inMonth(l.created_at, year, month)).length);
+
+  const serviceCounts = new Map<string, number>();
+  for (const r of rfqs) {
+    serviceCounts.set(r.service, (serviceCounts.get(r.service) || 0) + 1);
+  }
+  const serviceSegments = Array.from(serviceCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, count], i) => ({
+      label,
+      value: totalRfqs > 0 ? Math.round((count / totalRfqs) * 100) : 0,
+      color: serviceColors[i % serviceColors.length],
+    }));
+
+  const performanceRows = Array.from(serviceCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([service, count]) => {
+      const serviceLeads = leads.filter((l) => l.service === service);
+      const serviceWon = serviceLeads.filter((l) => l.stage === "won").length;
+      const conversion = serviceLeads.length > 0 ? Math.round((serviceWon / serviceLeads.length) * 100) : 0;
+      const serviceRfqs = rfqs.filter((r) => r.service === service);
+      const avgBudget = serviceRfqs.length > 0 ? Math.round(serviceRfqs.reduce((s, r) => s + parseBudgetMidpoint(r.budget), 0) / serviceRfqs.length) : 0;
+      const demand = count >= 8 ? "High" : count >= 3 ? "Medium" : "Low";
+      return { service, rfqs: count, conversion: `${conversion}%`, avgBudget: `$${Math.round(avgBudget / 1000)}K`, demand };
+    });
+
+  const demandStyle: Record<string, { pill: string; text: string }> = {
+    High: { pill: "bg-[#DCFCE7]", text: "text-[#068653]" },
+    Medium: { pill: "bg-[#FEF9C3]", text: "text-[#FD6513]" },
+    Low: { pill: "bg-[#FEE2E2]", text: "text-[#E7000B]" },
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -80,28 +131,30 @@ export default function AnalyticsPage() {
 
       <main className="px-6 py-6 flex flex-col gap-6 pb-10">
 
-        {/* Period selector + Export */}
+        {/* Export */}
         <motion.div
-          className="flex items-center justify-between"
+          className="flex items-center justify-end"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, delay: 0.05 }}
         >
-          <SelectDropdown
-            value={period}
-            onChange={setPeriod}
-            className="w-[160px]"
-            options={[
-              { label: "Last 7 Months", value: "last_7_months" },
-              { label: "Last 3 Months", value: "last_3_months" },
-              { label: "This Year",     value: "this_year" },
-            ]}
-          />
           <motion.button
             className="flex items-center gap-[6px] px-4 h-9 bg-[#2D2555] rounded-[6px] text-[12px] font-semibold text-[#FAFAFA] cursor-pointer"
             style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.1), 0px 1px 2px -1px rgba(0,0,0,0.1)" }}
             whileHover={{ scale: 1.03, boxShadow: "0 4px 12px rgba(45,37,85,0.3)" }}
             whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              const header = ["Service", "RFQs", "Conversion", "Avg Budget", "Demand"];
+              const rows = performanceRows.map((r) => [r.service, r.rfqs, r.conversion, r.avgBudget, r.demand]);
+              const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "analytics.csv";
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
           >
             <Download size={16} />
             <span>Export Data</span>
@@ -134,15 +187,7 @@ export default function AnalyticsPage() {
                   >
                     <Icon size={20} style={{ color: card.iconColor }} />
                   </div>
-                  <span
-                    className={`text-[12px] font-bold leading-4 px-2 py-[2px] rounded-full ${
-                      card.positive
-                        ? "bg-[#F0FDF4] text-[#16A34A]"
-                        : "bg-[#FEF2F2] text-[#DC2626]"
-                    }`}
-                  >
-                    {card.change}
-                  </span>
+                  <span className="text-[11px] font-semibold text-[#94A3B8]">{card.tag}</span>
                 </div>
 
                 {/* Value */}
@@ -164,8 +209,8 @@ export default function AnalyticsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
         >
-          <RevenueTrendChart />
-          <ServiceBreakdownChart />
+          <RevenueTrendChart categories={monthLabels} values={pipelineValueSeries} />
+          <ServiceBreakdownChart segments={serviceSegments} />
         </motion.div>
 
         {/* Bar chart */}
@@ -174,7 +219,7 @@ export default function AnalyticsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.25 }}
         >
-          <RFQVolumeChart />
+          <RFQVolumeChart categories={monthLabels} submitted={submittedSeries} won={wonSeries} />
         </motion.div>
 
         {/* Performance Breakdown table */}

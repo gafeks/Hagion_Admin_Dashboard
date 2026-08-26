@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Close, DocumentAttachment } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/logActivity";
+import Loader from "@/components/shared/Loader";
 
 interface LeadDetail {
   id: string;
@@ -42,8 +45,52 @@ function DetailField({ label, value }: { label: string; value: string }) {
   );
 }
 
+interface LeadNote {
+  id: string;
+  note: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 export default function LeadDetailModal({ lead, currentStage, open, onClose, onMoveToStage }: LeadDetailModalProps) {
   const [note, setNote] = useState("");
+  const [notes, setNotes] = useState<LeadNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+
+  useEffect(() => {
+    if (!lead) return;
+    setLoadingNotes(true);
+    supabase
+      .from("lead_notes")
+      .select("*")
+      .eq("lead_id", lead.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setNotes(data ?? []);
+        setLoadingNotes(false);
+      });
+  }, [lead?.id]);
+
+  const handleAddNote = async () => {
+    if (!lead || !note.trim()) return;
+    setSavingNote(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    const createdBy = user?.email ?? null;
+
+    const { data, error } = await supabase
+      .from("lead_notes")
+      .insert({ lead_id: lead.id, note: note.trim(), created_by: createdBy })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setNotes((prev) => [data, ...prev]);
+      setNote("");
+      logActivity({ action: "created", module: "CRM", affectedItem: lead.client, description: `Added a note to ${lead.client}` });
+    }
+    setSavingNote(false);
+  };
 
   return (
     <AnimatePresence>
@@ -133,6 +180,22 @@ export default function LeadDetailModal({ lead, currentStage, open, onClose, onM
                     <DocumentAttachment size={12} className="text-[#94A3B8]" />
                     <span className="text-[12px] font-normal leading-[15px] tracking-[0.25px] capitalize text-[#A9A9A9]">Internal Notes</span>
                   </div>
+
+                  {loadingNotes ? (
+                    <Loader compact />
+                  ) : notes.length > 0 ? (
+                    <div className="flex flex-col gap-2 max-h-[120px] overflow-y-auto pr-1">
+                      {notes.map((n) => (
+                        <div key={n.id} className="bg-[#F8FAFC] rounded-md px-3 py-2">
+                          <p className="text-[12px] text-[#334155]">{n.note}</p>
+                          <p className="text-[10px] text-[#94A3B8] mt-1">
+                            {n.created_by || "admin"} · {new Date(n.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <textarea
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
@@ -141,13 +204,14 @@ export default function LeadDetailModal({ lead, currentStage, open, onClose, onM
                     style={{ boxShadow: "0px 1px 2px rgba(0,0,0,0.05)" }}
                   />
                   <motion.button
-                    className="self-start px-3 h-8 bg-[#2D2555] text-white text-[12px] font-semibold rounded-md hover:bg-[#231d45] transition-colors"
+                    className="self-start px-3 h-8 bg-[#2D2555] text-white text-[12px] font-semibold rounded-md hover:bg-[#231d45] transition-colors disabled:opacity-60"
                     style={{ boxShadow: "0px 1px 3px rgba(0,0,0,0.1), 0px 1px 2px -1px rgba(0,0,0,0.1)" }}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => { console.log("Note:", note); setNote(""); }}
+                    disabled={savingNote || !note.trim()}
+                    onClick={handleAddNote}
                   >
-                    Add Note
+                    {savingNote ? "Saving..." : "Add Note"}
                   </motion.button>
                 </div>
               </div>

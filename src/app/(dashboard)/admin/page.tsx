@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   UserAdmin,
@@ -15,51 +15,9 @@ import {
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import ManageAdminModal from "@/components/admin/ManageAdminModal";
 import AddAdminModal from "@/components/admin/AddAdminModal";
-
-const statCards = [
-  {
-    label: "Super Admins",
-    value: "1",
-    bg: "rgba(45,37,85,0.05)",
-    iconBg: "rgba(45,37,85,0.07)",
-    valueColor: "#2D2555",
-    iconColor: "#2D2555",
-    icon: UserAdmin,
-  },
-  {
-    label: "Admins",
-    value: "2",
-    bg: "#E3FFF4",
-    iconBg: "rgba(6,134,83,0.07)",
-    valueColor: "#068653",
-    iconColor: "#068653",
-    icon: User,
-  },
-  {
-    label: "Content Admins",
-    value: "3",
-    bg: "rgba(168,85,247,0.05)",
-    iconBg: "rgba(168,85,247,0.1)",
-    valueColor: "#A855F7",
-    iconColor: "#A855F7",
-    icon: Edit,
-  },
-  {
-    label: "Total Users",
-    value: "6",
-    bg: "#FFF0E8",
-    iconBg: "rgba(253,101,19,0.1)",
-    valueColor: "#FD6513",
-    iconColor: "#FD6513",
-    icon: UserMultiple,
-  },
-];
-
-const teamMembers = [
-  { name: "Gift Akemor",  initials: "G", email: "gifthegion@gmail.com",   role: "Super Admin"   },
-  { name: "Pepple Egube", initials: "P", email: "peppleegube2@gmail.com",  role: "Service Admin" },
-  { name: "Udeme Jonah",  initials: "U", email: "udemejonah199@gmail.com", role: "Content Admin" },
-];
+import Loader from "@/components/shared/Loader";
+import ErrorState from "@/components/shared/ErrorState";
+import { supabase } from "@/lib/supabase";
 
 const permissions = [
   { label: "View Analytics",      superAdmin: true,  admin: true,  contentAdmin: false },
@@ -80,18 +38,96 @@ function PermIcon({ allowed }: { allowed: boolean }) {
   );
 }
 
-type Member = { name: string; initials: string; email: string; role: string };
+interface Member {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: string;
+}
 
 export default function AdminManagementPage() {
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [managingMember, setManagingMember] = useState<Member | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = teamMembers.filter(
+  const loadMembers = () => {
+    setLoading(true);
+    setError(null);
+    supabase
+      .from("admin_profiles")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .then(({ data, error: fetchError }) => {
+        if (fetchError || !data) {
+          setError("Couldn't load team members. Please try again.");
+          setLoading(false);
+          return;
+        }
+        setMembers(
+          data.map((row) => ({
+            id: row.id,
+            name: row.full_name || row.email.split("@")[0],
+            initials: (row.full_name || row.email).charAt(0).toUpperCase(),
+            email: row.email,
+            role: row.role,
+          }))
+        );
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadMembers();
+  }, []);
+
+  const filtered = members.filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.email.toLowerCase().includes(search.toLowerCase())
   );
+
+  const statCards = [
+    {
+      label: "Super Admins",
+      value: String(members.filter((m) => m.role === "Super Admin").length),
+      bg: "rgba(45,37,85,0.05)",
+      iconBg: "rgba(45,37,85,0.07)",
+      valueColor: "#2D2555",
+      iconColor: "#2D2555",
+      icon: UserAdmin,
+    },
+    {
+      label: "Admins",
+      value: String(members.filter((m) => m.role === "Admin").length),
+      bg: "#E3FFF4",
+      iconBg: "rgba(6,134,83,0.07)",
+      valueColor: "#068653",
+      iconColor: "#068653",
+      icon: User,
+    },
+    {
+      label: "Content Admins",
+      value: String(members.filter((m) => m.role === "Content Admin").length),
+      bg: "rgba(168,85,247,0.05)",
+      iconBg: "rgba(168,85,247,0.1)",
+      valueColor: "#A855F7",
+      iconColor: "#A855F7",
+      icon: Edit,
+    },
+    {
+      label: "Total Users",
+      value: String(members.length),
+      bg: "#FFF0E8",
+      iconBg: "rgba(253,101,19,0.1)",
+      valueColor: "#FD6513",
+      iconColor: "#FD6513",
+      icon: UserMultiple,
+    },
+  ];
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -154,9 +190,6 @@ export default function AdminManagementPage() {
                   <Add size={14} />
                   Add Admin
                 </motion.button>
-                <button className="flex items-center justify-center px-3 h-7 bg-[#F1F5F9] rounded-[8px] text-[12px] font-semibold text-[#64748B] cursor-pointer">
-                  All Users
-                </button>
               </div>
             </div>
 
@@ -174,6 +207,11 @@ export default function AdminManagementPage() {
             </div>
           </div>
 
+          {loading ? (
+            <Loader />
+          ) : error ? (
+            <ErrorState message={error} onRetry={loadMembers} />
+          ) : (
           <div className="flex flex-col">
             {filtered.map((member, i) => (
               <motion.div
@@ -212,6 +250,7 @@ export default function AdminManagementPage() {
               </motion.div>
             ))}
           </div>
+          )}
         </motion.div>
 
         {/* Permission Matrix */}
@@ -272,12 +311,13 @@ export default function AdminManagementPage() {
 
       </main>
 
-      <AddAdminModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddAdminModal open={addOpen} onClose={() => setAddOpen(false)} onAdded={loadMembers} />
 
       <ManageAdminModal
         member={managingMember}
         open={!!managingMember}
         onClose={() => setManagingMember(null)}
+        onRoleChanged={loadMembers}
       />
     </div>
   );

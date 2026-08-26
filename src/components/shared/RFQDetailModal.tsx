@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Close, DocumentDownload } from "@carbon/icons-react";
+import { Close, DocumentDownload, ChartLineSmooth } from "@carbon/icons-react";
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/logActivity";
 
 interface RFQDetail {
+  id: string;
   code: string;
   client: string;
   email: string;
@@ -21,6 +23,7 @@ interface RFQDetailModalProps {
   rfq: RFQDetail | null;
   open: boolean;
   onClose: () => void;
+  onAddedToPipeline?: (rfqId: string) => void;
 }
 
 function DetailField({ label, value, capitalize = true }: { label: string; value: string; capitalize?: boolean }) {
@@ -32,8 +35,20 @@ function DetailField({ label, value, capitalize = true }: { label: string; value
   );
 }
 
-export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalProps) {
+export default function RFQDetailModal({ rfq, open, onClose, onAddedToPipeline }: RFQDetailModalProps) {
   const [downloading, setDownloading] = useState(false);
+  const [inPipeline, setInPipeline] = useState(false);
+  const [addingToPipeline, setAddingToPipeline] = useState(false);
+
+  useEffect(() => {
+    if (!rfq) return;
+    setInPipeline(false);
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("rfq_id", rfq.id)
+      .then(({ count }) => setInPipeline(!!count && count > 0));
+  }, [rfq?.id]);
 
   const handleDownload = async () => {
     if (!rfq?.filePath) return;
@@ -41,6 +56,28 @@ export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalPro
     const { data } = await supabase.storage.from("rfq-attachments").createSignedUrl(rfq.filePath, 60);
     setDownloading(false);
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
+  const handleAddToPipeline = async () => {
+    if (!rfq) return;
+    setAddingToPipeline(true);
+    const { error } = await supabase.from("leads").insert({
+      rfq_id: rfq.id,
+      client: rfq.client,
+      rfq_code: rfq.code,
+      service: rfq.service,
+      budget: rfq.budget,
+      timeline: rfq.timeline,
+      email: rfq.email,
+      phone: rfq.phone,
+      stage: "new-lead",
+    });
+    if (!error) {
+      setInPipeline(true);
+      onAddedToPipeline?.(rfq.id);
+      logActivity({ action: "created", module: "CRM", affectedItem: rfq.client, description: `Added ${rfq.client} to the CRM pipeline` });
+    }
+    setAddingToPipeline(false);
   };
 
   return (
@@ -117,6 +154,15 @@ export default function RFQDetailModal({ rfq, open, onClose }: RFQDetailModalPro
                     {downloading ? "Preparing download..." : "Download attachment"}
                   </button>
                 )}
+
+                <button
+                  onClick={handleAddToPipeline}
+                  disabled={addingToPipeline || inPipeline}
+                  className="flex items-center justify-center gap-2 h-10 bg-[#2D2555] text-white text-[14px] font-semibold rounded-lg hover:bg-[#231d45] transition-colors disabled:opacity-60"
+                >
+                  <ChartLineSmooth size={16} />
+                  {inPipeline ? "Already in CRM Pipeline" : addingToPipeline ? "Adding..." : "Add to CRM Pipeline"}
+                </button>
               </div>
             </motion.div>
           </motion.div>

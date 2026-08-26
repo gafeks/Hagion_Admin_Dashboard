@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Edit, TrashCan } from "@carbon/icons-react";
 import EditProjectModal from "@/components/portfolio/EditProjectModal";
+import Loader from "@/components/shared/Loader";
+import ErrorState from "@/components/shared/ErrorState";
+import EmptyState from "@/components/shared/EmptyState";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/lib/logActivity";
 
-interface Project {
+export interface Project {
   id: string;
   title: string;
   status: "Planning" | "Completed" | "In progress" | "On hold";
@@ -15,54 +21,8 @@ interface Project {
   description: string;
   startDate: string;
   endDate: string;
+  coverImagePath: string | null;
 }
-
-const mockProjects: Project[] = [
-  {
-    id: "1",
-    title: "FinanceCore Cloud Migration",
-    status: "Planning",
-    client: "FinanceCore Inc.",
-    budget: "$85,000",
-    progress: 65,
-    description: "Full cloud migration of banking infrastructure to AWS with zero-downtime cutover strategy.",
-    startDate: "2025-01-15",
-    endDate: "2025-07-15",
-  },
-  {
-    id: "2",
-    title: "RetailPulse Dashboard V1",
-    status: "Completed",
-    client: "RetailPulse",
-    budget: "$35,000",
-    progress: 100,
-    description: "Real-time analytics dashboard for retail chain with sales, inventory, and customer insights.",
-    startDate: "2024-09-01",
-    endDate: "2025-01-31",
-  },
-  {
-    id: "3",
-    title: "MedTech Patient Portal",
-    status: "In progress",
-    client: "MedTech Labs",
-    budget: "$42,000",
-    progress: 40,
-    description: "Secure patient portal for appointment scheduling, test results, and teleconsultation.",
-    startDate: "2025-02-01",
-    endDate: "2025-08-01",
-  },
-  {
-    id: "4",
-    title: "E-Commerce Platform – Sahel Agri",
-    status: "On hold",
-    client: "Sahel Agri Solutions",
-    budget: "$32,000",
-    progress: 40,
-    description: "B2B e-commerce marketplace connecting smallholder farmers to wholesale buyers across West Africa.",
-    startDate: "2024-11-01",
-    endDate: "2025-05-01",
-  },
-];
 
 const statusConfig: Record<
   Project["status"],
@@ -98,9 +58,52 @@ const statusConfig: Record<
   },
 };
 
-export default function ProjectsTable({ searchQuery }: { searchQuery: string }) {
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+interface ProjectsTableProps {
+  searchQuery: string;
+  onCountChange?: (count: number) => void;
+}
+
+export default function ProjectsTable({ searchQuery, onCountChange }: ProjectsTableProps) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+
+  const loadProjects = () => {
+    setLoading(true);
+    setError(null);
+    supabase
+      .from("portfolio_projects")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error: fetchError }) => {
+        if (fetchError || !data) {
+          setError("Couldn't load projects. Please try again.");
+          setLoading(false);
+          return;
+        }
+        const mapped = data.map((row) => ({
+          id: row.id,
+          title: row.title,
+          status: row.status,
+          client: row.client || "",
+          budget: row.budget || "",
+          progress: row.progress,
+          description: row.description || "",
+          startDate: row.start_date || "",
+          endDate: row.end_date || "",
+          coverImagePath: row.cover_image_path,
+        }));
+        setProjects(mapped);
+        onCountChange?.(mapped.length);
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
 
   const filtered = projects.filter(
     (p) =>
@@ -108,9 +111,17 @@ export default function ProjectsTable({ searchQuery }: { searchQuery: string }) 
       p.client.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDelete = (id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+  const handleDelete = async (project: Project) => {
+    setDeletingProject(null);
+    setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    onCountChange?.(projects.length - 1);
+    await supabase.from("portfolio_projects").delete().eq("id", project.id);
+    logActivity({ action: "deleted", module: "Portfolio", affectedItem: project.title, description: `Deleted portfolio item: '${project.title}'` });
   };
+
+  if (loading) return <Loader />;
+  if (error) return <ErrorState message={error} onRetry={loadProjects} />;
+  if (filtered.length === 0) return <EmptyState title="No projects found" description="Create your first project or adjust your search." />;
 
   return (
     <>
@@ -182,7 +193,7 @@ export default function ProjectsTable({ searchQuery }: { searchQuery: string }) 
                       className="w-9 h-9 flex items-center justify-center rounded-[6px] hover:bg-red-50 transition-colors cursor-pointer"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      onClick={() => handleDelete(project.id)}
+                      onClick={() => setDeletingProject(project)}
                       aria-label="Delete project"
                     >
                       <TrashCan size={16} className="text-[#F87171]" />
@@ -199,6 +210,16 @@ export default function ProjectsTable({ searchQuery }: { searchQuery: string }) 
         project={editingProject}
         open={!!editingProject}
         onClose={() => setEditingProject(null)}
+        onSaved={loadProjects}
+      />
+
+      <ConfirmDialog
+        open={!!deletingProject}
+        title="Delete this project?"
+        message={`"${deletingProject?.title}" will be permanently deleted. This can't be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => deletingProject && handleDelete(deletingProject)}
+        onCancel={() => setDeletingProject(null)}
       />
     </>
   );

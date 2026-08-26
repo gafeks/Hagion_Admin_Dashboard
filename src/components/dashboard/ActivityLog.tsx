@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -8,22 +9,52 @@ import {
   Analytics,
   Checkmark,
 } from "@carbon/icons-react";
+import { supabase } from "@/lib/supabase";
 
 const quickActions = [
-  { label: "New RFQ", icon: Add, iconColor: "#2D2555", iconBg: "rgba(45, 37, 85, 0.082)", href: "/rfqs/new" },
-  { label: "New Blog", icon: Add, iconColor: "#A855F7", iconBg: "rgba(168, 85, 247, 0.082)", href: "/blog/new" },
+  { label: "New RFQ", icon: Add, iconColor: "#2D2555", iconBg: "rgba(45, 37, 85, 0.082)", href: "/rfqs" },
+  { label: "New Blog", icon: Add, iconColor: "#A855F7", iconBg: "rgba(168, 85, 247, 0.082)", href: "/blog" },
   { label: "View CRM", icon: ChartLineSmooth, iconColor: "#068653", iconBg: "rgba(6, 134, 83, 0.082)", href: "/crm" },
   { label: "Analytics", icon: Analytics, iconColor: "#3B82F6", iconBg: "rgba(59, 130, 246, 0.082)", href: "/analytics" },
 ];
 
-const activities = [
-  { action: "RFQ updated —", company: "TechBridge Ghana", time: "Mar 6, 11:49 AM" },
-  { action: "RFQ updated —", company: "Sahel Agri Solutions", time: "Mar 6, 11:49 AM" },
-  { action: "RFQ updated —", company: "LogistiCore Nigeria", time: "Mar 6, 11:49 AM" },
-  { action: "RFQ updated —", company: "NileHealth Sudan", time: "Mar 6, 11:49 AM" },
-];
+interface ActivityItem {
+  id: string;
+  description: string;
+  time: string;
+}
 
 export default function ActivityLog() {
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [conversionRate, setConversionRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("activity_log")
+      .select("id, description, created_at")
+      .order("created_at", { ascending: false })
+      .limit(4)
+      .then(({ data }) => {
+        setActivities(
+          (data ?? []).map((row) => ({
+            id: row.id,
+            description: row.description || "",
+            time: new Date(row.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+          }))
+        );
+      });
+
+    supabase
+      .from("leads")
+      .select("stage")
+      .then(({ data }) => {
+        const leads = data ?? [];
+        if (leads.length === 0) return;
+        const won = leads.filter((l) => l.stage === "won").length;
+        setConversionRate(Math.round((won / leads.length) * 100));
+      });
+  }, []);
+
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-5">
       {/* Quick Actions */}
@@ -63,24 +94,25 @@ export default function ActivityLog() {
       >
         <h3 className="text-[16px] font-bold text-[#0F172A] mb-4">Activity Feed</h3>
         <div className="flex flex-col gap-3">
-          {activities.map((item, i) => (
-            <motion.div
-              key={i}
-              className="flex items-start gap-3"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 + i * 0.06 }}
-            >
-              <div className="mt-1.5 w-2 h-2 rounded-full bg-[#F59E0B] shrink-0" />
-              <div>
-                <p className="text-[12px] text-[#334155]">
-                  <span className="font-semibold">{item.action}</span>{" "}
-                  <span className="font-semibold">{item.company}</span>
-                </p>
-                <p className="text-[10px] text-[#94A3B8] mt-0.5">{item.time}</p>
-              </div>
-            </motion.div>
-          ))}
+          {activities.length === 0 ? (
+            <p className="text-[12px] text-[#94A3B8]">No activity yet.</p>
+          ) : (
+            activities.map((item, i) => (
+              <motion.div
+                key={item.id}
+                className="flex items-start gap-3"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.06 }}
+              >
+                <div className="mt-1.5 w-2 h-2 rounded-full bg-[#F59E0B] shrink-0" />
+                <div>
+                  <p className="text-[12px] font-semibold text-[#334155]">{item.description}</p>
+                  <p className="text-[10px] text-[#94A3B8] mt-0.5">{item.time}</p>
+                </div>
+              </motion.div>
+            ))
+          )}
         </div>
       </motion.div>
 
@@ -97,9 +129,11 @@ export default function ActivityLog() {
           <Checkmark size={16} className="text-[#068653]" />
           <span className="text-[12px] font-bold text-[#068653] uppercase tracking-[0.6px]">Performance</span>
         </div>
-        <p className="text-[14px] font-semibold text-white">All metrics trending up</p>
+        <p className="text-[14px] font-semibold text-white">
+          {conversionRate !== null ? `Conversion rate at ${conversionRate}%` : "Building your pipeline"}
+        </p>
         <p className="text-[12px] text-[#94A3B8] mt-1">
-          Conversion rate improved 5% this quarter compared to last.
+          {conversionRate !== null ? "Based on leads won across the CRM pipeline." : "Add leads to the CRM pipeline to track conversion."}
         </p>
       </motion.div>
     </div>

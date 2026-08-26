@@ -10,6 +10,7 @@ import NewProjectModal from "@/components/portfolio/NewProjectModal";
 export default function PortfolioPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -57,11 +58,15 @@ export default function PortfolioPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
         >
-          <ProjectsTable searchQuery={searchQuery} />
+          <ProjectsTable key={refreshKey} searchQuery={searchQuery} />
         </motion.div>
       </main>
 
-      <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <NewProjectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

@@ -5,10 +5,10 @@ import { motion } from "framer-motion";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import ConversationList from "@/components/messages/ConversationList";
 import ChatView from "@/components/messages/ChatView";
-import { conversations, Conversation } from "@/components/messages/data";
+import { Conversation } from "@/components/messages/types";
 
 export default function MessagesPage() {
-  const [activeConversation, setActiveConversation] = useState<Conversation>(conversations[0]);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -22,10 +22,16 @@ export default function MessagesPage() {
           transition={{ duration: 0.4, delay: 0.1 }}
         >
           <ConversationList
-            activeId={activeConversation.id}
+            activeId={activeConversation?.id ?? null}
             onSelect={setActiveConversation}
           />
-          <ChatView conversation={activeConversation} />
+          {activeConversation ? (
+            <ChatView conversation={activeConversation} />
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-white border border-[#F1F5F9] rounded-[16px] text-[14px] text-[#94A3B8]">
+              Select a conversation to view messages
+            </div>
+          )}
         </motion.div>
       </main>
     </div>

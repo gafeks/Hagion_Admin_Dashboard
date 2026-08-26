@@ -1,23 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Activity, Download, Restart, Search, Filter, View } from "@carbon/icons-react";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import ActivityDetailModal, { LogEntry } from "@/components/activity/ActivityDetailModal";
-
-const logs: LogEntry[] = [
-  { id: 1,  initials: "G", name: "Gift Akemor",    email: "giftakem@hagion.com",  role: "Super Admin",   action: "approved",  description: "Approved RFQ from Nexus Corp",                module: "RFQ",              affectedItem: "RFQ-2025-0042",             date: "Jan 15, 2025 · 2:15 PM",  ipAddress: "192.168.1.101", device: "Web · Windows 11", additionalDetails: "Approved and forwarded RFQ to the project team for proposal preparation." },
-  { id: 2,  initials: "D", name: "David Tari",     email: "david@hagion.com",     role: "Blog Admin",    action: "published", description: "Published blog post: 'Digital Transf...'",    module: "Blog",             affectedItem: "Digital Transformation...",  date: "Jan 15, 2025 · 1:00 PM",  ipAddress: "192.168.1.45",  device: "Web · macOS",      additionalDetails: "Published blog post on digital transformation strategies for enterprise clients." },
-  { id: 3,  initials: "P", name: "Priya Sharma",   email: "priya@hagion.com",     role: "Content Admin", action: "deleted",   description: "Deleted portfolio item: 'FinTech App...'",    module: "Portfolio",        affectedItem: "FinTech App Redesign",       date: "Jan 15, 2025 · 12:30 PM", ipAddress: "192.168.1.78",  device: "Web · Windows 10", additionalDetails: "Removed outdated FinTech App Redesign portfolio item as it no longer reflects current work." },
-  { id: 4,  initials: "J", name: "James Okonkwo",  email: "james@hagion.com",     role: "Service Admin", action: "edited",    description: "Edited service page: 'Cloud Infrastructure'", module: "Services",         affectedItem: "Cloud Infrastructure",       date: "Jan 15, 2025 · 11:45 AM", ipAddress: "192.168.1.23",  device: "Web · macOS",      additionalDetails: "Updated cloud infrastructure service page with revised pricing tiers and feature list." },
-  { id: 5,  initials: "S", name: "Sarah Mitchell", email: "sarah@hagion.com",     role: "Super Admin",   action: "created",   description: "Created new blog post: 'Top 5 Business...'",  module: "Blog",             affectedItem: "Top 5 Business Trends...",   date: "Jan 15, 2025 · 10:24 AM", ipAddress: "192.168.1.102", device: "Web · Windows 11", additionalDetails: "Created new blog post draft on top 5 business technology trends for 2025." },
-  { id: 6,  initials: "S", name: "Sarah Mitchell", email: "sarah@hagion.com",     role: "Super Admin",   action: "created",   description: "Invited new admin: analytic...",               module: "Admin Management", affectedItem: "analytics@hagion.com",       date: "Jan 15, 2025 · 9:50 AM",  ipAddress: "192.168.1.102", device: "Web · Windows 11", additionalDetails: "Invited analytics@hagion.com to join the platform with Content Admin permissions." },
-  { id: 7,  initials: "D", name: "David Tari",     email: "david@hagion.com",     role: "Blog Admin",    action: "rejected",  description: "Rejected RFQ from Delta Logistics",            module: "RFQ",              affectedItem: "RFQ-2025-0039",              date: "Jan 14, 2025 · 3:10 PM",  ipAddress: "192.168.1.45",  device: "Web · macOS",      additionalDetails: "Rejected RFQ from Delta Logistics due to incomplete project specification and budget mismatch." },
-  { id: 8,  initials: "P", name: "Priya Sharma",   email: "priya@hagion.com",     role: "Content Admin", action: "updated",   description: "Updated portfolio: 'E-Commerce Platform'",     module: "Portfolio",        affectedItem: "E-Commerce Platform",        date: "Jan 14, 2025 · 1:30 PM",  ipAddress: "192.168.1.78",  device: "Web · Windows 10", additionalDetails: "Updated E-Commerce Platform portfolio entry with new screenshots and project outcome metrics." },
-  { id: 9,  initials: "J", name: "James Okonkwo",  email: "james@hagion.com",     role: "Service Admin", action: "approved",  description: "Approved RFQ from BrightPath Ltd",             module: "RFQ",              affectedItem: "RFQ-2025-0038",              date: "Jan 14, 2025 · 11:00 AM", ipAddress: "192.168.1.23",  device: "Web · macOS",      additionalDetails: "Approved RFQ from BrightPath Ltd and escalated to the solutions team for scoping." },
-  { id: 10, initials: "G", name: "Gift Akemor",    email: "giftakem@hagion.com",  role: "Super Admin",   action: "created",   description: "Added new team member: Priya Sharma",          module: "Admin Management", affectedItem: "priya@hagion.com",           date: "Jan 14, 2025 · 9:15 AM",  ipAddress: "192.168.1.101", device: "Web · Windows 11", additionalDetails: "Added Priya Sharma as Content Admin with access to portfolio and blog modules." },
-];
+import Loader from "@/components/shared/Loader";
+import ErrorState from "@/components/shared/ErrorState";
+import EmptyState from "@/components/shared/EmptyState";
+import { supabase } from "@/lib/supabase";
 
 const actionStyle: Record<string, { bg: string; text: string }> = {
   approved:  { bg: "rgba(6,134,83,0.1)", text: "#068653" },
@@ -40,10 +31,13 @@ const moduleStyle: Record<string, { bg: string; text: string }> = {
   "Admin Management":{ bg: "#FEE2E2",            text: "#E7000B" },
 };
 
-const allRoles   = ["All Roles",   "Super Admin", "Blog Admin", "Content Admin", "Service Admin"];
-const allModules = ["All Modules", "RFQ", "Blog", "Portfolio", "CRM", "Analytics", "Messages", "Services", "Admin Management"];
+const allRoles   = ["All Roles",   "Super Admin", "Admin", "Content Admin"];
+const allModules = ["All Modules", "RFQ", "Blog", "Portfolio", "CRM", "Messages", "Admin Management"];
 
 export default function ActivityPage() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search,      setSearch]      = useState("");
   const [roleFilter,  setRoleFilter]  = useState("All Roles");
   const [modFilter,   setModFilter]   = useState("All Modules");
@@ -51,12 +45,53 @@ export default function ActivityPage() {
   const [toDate,      setToDate]      = useState("");
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
+  const loadLogs = () => {
+    setLoading(true);
+    setError(null);
+    supabase
+      .from("activity_log")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200)
+      .then(({ data, error: fetchError }) => {
+        if (fetchError || !data) {
+          setError("Couldn't load the activity log. Please try again.");
+          setLoading(false);
+          return;
+        }
+        setLogs(
+          data.map((row) => ({
+            id: row.id,
+            initials: (row.actor_name || row.actor_email || "?").charAt(0).toUpperCase(),
+            name: row.actor_name || row.actor_email || "Unknown",
+            email: row.actor_email || "",
+            role: row.actor_role || "—",
+            action: row.action,
+            description: row.description || "",
+            module: row.module,
+            affectedItem: row.affected_item || "",
+            date: new Date(row.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }),
+            device: row.device || "",
+            additionalDetails: row.description || "",
+          }))
+        );
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadLogs();
+  }, []);
+
   const filtered = logs.filter((l) => {
     const q = search.toLowerCase();
     const matchSearch = !q || l.name.toLowerCase().includes(q) || l.action.toLowerCase().includes(q) || l.affectedItem.toLowerCase().includes(q) || l.description.toLowerCase().includes(q);
     const matchRole   = roleFilter === "All Roles"   || l.role   === roleFilter;
     const matchMod    = modFilter  === "All Modules" || l.module  === modFilter;
-    return matchSearch && matchRole && matchMod;
+    const logDate = new Date(l.date);
+    const matchFrom = !fromDate || logDate >= new Date(fromDate);
+    const matchTo = !toDate || logDate <= new Date(new Date(toDate).getTime() + 86400000);
+    return matchSearch && matchRole && matchMod && matchFrom && matchTo;
   });
 
   const dropdownCls = "appearance-none h-10 px-3 pr-7 text-[14px] text-[#0A0A0A] bg-white border border-[#E2E8F0] rounded-[12px] outline-none cursor-pointer flex-shrink-0";
@@ -91,6 +126,7 @@ export default function ActivityPage() {
               style={{ boxShadow: "0px 1px 2px rgba(0,0,0,0.05)" }}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={loadLogs}
             >
               <Restart size={16} />
               <span>Refresh</span>
@@ -99,6 +135,18 @@ export default function ActivityPage() {
               className="flex items-center gap-2 px-4 h-9 bg-[#2D2555] rounded-[8px] text-[14px] text-white cursor-pointer"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                const header = ["Admin", "Email", "Role", "Action", "Module", "Affected Item", "Date"];
+                const rows = filtered.map((l) => [l.name, l.email, l.role, l.action, l.module, l.affectedItem, l.date]);
+                const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "activity-log.csv";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
             >
               <Download size={16} />
               <span>Export Data</span>
@@ -178,6 +226,13 @@ export default function ActivityPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.15 }}
         >
+          {loading ? (
+            <Loader />
+          ) : error ? (
+            <ErrorState message={error} onRetry={loadLogs} />
+          ) : filtered.length === 0 ? (
+            <EmptyState title="No activity yet" description="Actions taken across the dashboard will show up here." />
+          ) : (
           <table className="w-full">
             <thead>
               <tr className="bg-[#F8FAFC]">
@@ -272,6 +327,7 @@ export default function ActivityPage() {
               })}
             </tbody>
           </table>
+          )}
         </motion.div>
 
       </main>

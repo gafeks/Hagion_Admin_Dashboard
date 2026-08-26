@@ -39,7 +39,7 @@ interface RFQ {
   filePath?: string | null;
 }
 
-const columns = ["Code", "Client", "Service", "Status", "Date", "Actions"];
+const columns = ["Code", "Client", "Service", "Status", "CRM", "Date", "Actions"];
 
 export default function RFQsPage() {
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
@@ -51,38 +51,41 @@ export default function RFQsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRFQ, setSelectedRFQ] = useState<RFQ | null>(null);
   const [openStatusRowId, setOpenStatusRowId] = useState<string | null>(null);
+  const [pipelineRfqIds, setPipelineRfqIds] = useState<Set<string>>(new Set());
 
-  const loadRfqs = () => {
+  const loadRfqs = async () => {
     setLoading(true);
     setError(null);
-    supabase
-      .from("rfqs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error: fetchError }) => {
-        if (fetchError || !data) {
-          setError("Couldn't load RFQs. Please try again.");
-          setLoading(false);
-          return;
-        }
-        setRfqs(
-          data.map((row) => ({
-            id: row.id,
-            code: row.code,
-            client: row.company_name || row.full_name,
-            email: row.email,
-            phone: row.phone,
-            service: row.service,
-            status: row.status,
-            date: new Date(row.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-            budget: row.budget,
-            timeline: row.timeline,
-            description: row.description,
-            filePath: row.file_path,
-          }))
-        );
-        setLoading(false);
-      });
+
+    const [rfqRes, leadRes] = await Promise.all([
+      supabase.from("rfqs").select("*").order("created_at", { ascending: false }),
+      supabase.from("leads").select("rfq_id"),
+    ]);
+
+    if (rfqRes.error || !rfqRes.data) {
+      setError("Couldn't load RFQs. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    setPipelineRfqIds(new Set((leadRes.data ?? []).map((l) => l.rfq_id).filter(Boolean)));
+    setRfqs(
+      rfqRes.data.map((row) => ({
+        id: row.id,
+        code: row.code,
+        client: row.company_name || row.full_name,
+        email: row.email,
+        phone: row.phone,
+        service: row.service,
+        status: row.status,
+        date: new Date(row.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        budget: row.budget,
+        timeline: row.timeline,
+        description: row.description,
+        filePath: row.file_path,
+      }))
+    );
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -180,7 +183,7 @@ export default function RFQsPage() {
               <thead>
                 <tr className="bg-[#2D2555]/[0.07]">
                   {columns.map((col) => (
-                    <th key={col} className="text-left px-6 py-2.5 text-[11px] font-semibold uppercase text-[#64748B]">
+                    <th key={col} className="text-left px-4 py-2 text-[10px] font-semibold uppercase text-[#64748B]">
                       {col}
                     </th>
                   ))}
@@ -198,33 +201,33 @@ export default function RFQsPage() {
                     transition={{ duration: 0.3, delay: 0.05 * i }}
                   >
                     {/* Code */}
-                    <td className="px-6 py-3.5 text-[13px] text-[#475569]">{rfq.code}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-[#475569]">{rfq.code}</td>
 
                     {/* Client */}
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2">
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-semibold text-[#0F172A]">{rfq.client}</span>
-                        <span className="text-[11px] text-[#64748B]">{rfq.email}</span>
+                        <span className="text-[12px] font-semibold text-[#0F172A]">{rfq.client}</span>
+                        <span className="text-[10px] text-[#64748B]">{rfq.email}</span>
                       </div>
                     </td>
 
                     {/* Service */}
-                    <td className="px-6 py-3.5 text-[13px] capitalize text-[#475569]">{rfq.service}</td>
+                    <td className="px-4 py-2.5 text-[12px] capitalize text-[#475569]">{rfq.service}</td>
 
                     {/* Status */}
-                    <td className="px-6 py-3 relative">
+                    <td className="px-4 py-2 relative">
                       <button
                         onClick={() => setOpenStatusRowId(openStatusRowId === rfq.id ? null : rfq.id)}
-                        className="flex items-center justify-between w-[136px] h-[28px] px-2.5 border border-[#E5E5E5] rounded-md shadow-sm"
+                        className="flex items-center justify-between w-[128px] h-[24px] px-2 border border-[#E5E5E5] rounded-md shadow-sm"
                       >
-                        <span className={`text-[11px] font-semibold px-[8px] py-[2px] rounded-md ${statusStyles[rfq.status]?.bg} ${statusStyles[rfq.status]?.text}`}>
+                        <span className={`text-[10px] font-semibold px-[6px] py-[1px] rounded-md ${statusStyles[rfq.status]?.bg} ${statusStyles[rfq.status]?.text}`}>
                           {rfq.status}
                         </span>
-                        <ChevronDown size={14} className="text-[#0A0A0A]/50" />
+                        <ChevronDown size={12} className="text-[#0A0A0A]/50" />
                       </button>
                       {openStatusRowId === rfq.id && (
                         <motion.div
-                          className="absolute top-[52px] left-6 w-[200px] bg-white p-1 flex flex-col gap-1 z-20"
+                          className="absolute top-[46px] left-4 w-[190px] bg-white p-1 flex flex-col gap-1 z-20"
                           style={{ boxShadow: "0px 0px 1px rgba(24, 24, 27, 0.3), 0px 4px 8px rgba(24, 24, 27, 0.1)", borderRadius: "4px" }}
                           initial={{ opacity: 0, y: -5 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -233,7 +236,7 @@ export default function RFQsPage() {
                             <button
                               key={s}
                               onClick={() => updateStatus(rfq.id, s)}
-                              className={`w-full text-left px-2 h-[26px] rounded-[2px] text-[12px] transition-colors ${rfq.status === s ? "bg-[#F4F4F5] font-medium" : "hover:bg-[#F4F4F5] font-normal"} text-black`}
+                              className={`w-full text-left px-2 h-[24px] rounded-[2px] text-[11px] transition-colors ${rfq.status === s ? "bg-[#F4F4F5] font-medium" : "hover:bg-[#F4F4F5] font-normal"} text-black`}
                             >
                               {s}
                             </button>
@@ -242,18 +245,29 @@ export default function RFQsPage() {
                       )}
                     </td>
 
+                    {/* CRM */}
+                    <td className="px-4 py-2">
+                      {pipelineRfqIds.has(rfq.id) ? (
+                        <span className="inline-flex items-center px-2 py-[2px] rounded-md text-[10px] font-semibold bg-[#DBEAFE] text-[#1D4ED8] whitespace-nowrap">
+                          In Pipeline
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[#CBD5E1]">—</span>
+                      )}
+                    </td>
+
                     {/* Date */}
-                    <td className="px-6 py-3.5 text-[13px] text-[#64748B]">{rfq.date}</td>
+                    <td className="px-4 py-2.5 text-[12px] text-[#64748B]">{rfq.date}</td>
 
                     {/* Actions */}
-                    <td className="px-6 py-3">
+                    <td className="px-4 py-2">
                       <motion.button
-                        className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-[#F5F8FA] transition-colors"
+                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#F5F8FA] transition-colors"
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => setSelectedRFQ(rfq)}
                       >
-                        <View size={15} className="text-[#94A3B8]" />
+                        <View size={14} className="text-[#94A3B8]" />
                       </motion.button>
                     </td>
                   </motion.tr>
@@ -278,6 +292,7 @@ export default function RFQsPage() {
         rfq={selectedRFQ}
         open={!!selectedRFQ}
         onClose={() => setSelectedRFQ(null)}
+        onAddedToPipeline={(rfqId) => setPipelineRfqIds((prev) => new Set(prev).add(rfqId))}
       />
     </div>
   );

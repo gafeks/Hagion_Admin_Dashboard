@@ -1,55 +1,78 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabase";
+import { lastNMonths, inMonth } from "@/lib/dateBuckets";
 
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-const options: ApexCharts.ApexOptions = {
-  chart: {
-    type: "area",
-    toolbar: { show: false },
-    fontFamily: "Open Sans, sans-serif",
-  },
-  colors: ["#2D2555", "#068653"],
-  stroke: { curve: "smooth", width: 2.5 },
-  fill: {
-    type: "gradient",
-    gradient: {
-      opacityFrom: 0.09,
-      opacityTo: 0,
-      stops: [5, 95],
-    },
-  },
-  xaxis: {
-    categories: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"],
-    labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
-    axisBorder: { show: false },
-    axisTicks: { show: false },
-  },
-  yaxis: {
-    labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
-    min: 0,
-    max: 24,
-    tickAmount: 4,
-  },
-  grid: {
-    borderColor: "#F1F5F9",
-    strokeDashArray: 4,
-    xaxis: { lines: { show: true } },
-    yaxis: { lines: { show: true } },
-  },
-  legend: { show: false },
-  dataLabels: { enabled: false },
-  tooltip: { theme: "dark" },
-};
-
-const series = [
-  { name: "RFQs", data: [4, 8, 10, 14, 12, 18, 6] },
-  { name: "Leads", data: [12, 6, 8, 4, 10, 2, 22] },
-];
-
 export default function TrafficChart() {
+  const [categories, setCategories] = useState<string[]>([]);
+  const [rfqSeries, setRfqSeries] = useState<number[]>([]);
+  const [leadSeries, setLeadSeries] = useState<number[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const months = lastNMonths(7);
+      setCategories(months.map((m) => m.label));
+
+      const [rfqRes, leadRes] = await Promise.all([
+        supabase.from("rfqs").select("created_at"),
+        supabase.from("leads").select("created_at"),
+      ]);
+
+      const rfqs = rfqRes.data ?? [];
+      const leads = leadRes.data ?? [];
+
+      setRfqSeries(months.map(({ year, month }) => rfqs.filter((r) => inMonth(r.created_at, year, month)).length));
+      setLeadSeries(months.map(({ year, month }) => leads.filter((l) => inMonth(l.created_at, year, month)).length));
+    })();
+  }, []);
+
+  const options: ApexCharts.ApexOptions = {
+    chart: {
+      type: "area",
+      toolbar: { show: false },
+      fontFamily: "Open Sans, sans-serif",
+    },
+    colors: ["#2D2555", "#068653"],
+    stroke: { curve: "smooth", width: 2.5 },
+    fill: {
+      type: "gradient",
+      gradient: {
+        opacityFrom: 0.09,
+        opacityTo: 0,
+        stops: [5, 95],
+      },
+    },
+    xaxis: {
+      categories,
+      labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      labels: { style: { colors: "#94A3B8", fontSize: "11px" } },
+      min: 0,
+    },
+    grid: {
+      borderColor: "#F1F5F9",
+      strokeDashArray: 4,
+      xaxis: { lines: { show: true } },
+      yaxis: { lines: { show: true } },
+    },
+    legend: { show: false },
+    dataLabels: { enabled: false },
+    tooltip: { theme: "dark" },
+  };
+
+  const series = [
+    { name: "RFQs", data: rfqSeries },
+    { name: "Leads", data: leadSeries },
+  ];
+
   return (
     <motion.div
       className="flex-[2] min-w-0 overflow-hidden bg-white border border-[#F1F5F9] rounded-2xl p-6"
